@@ -1,0 +1,35 @@
+name: CICD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Install dependencies
+        run: gradle clean build
+      - name: Login to docker hub
+        run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build docker image
+        run: docker build -t realbadass/springboot-quiz-repo .
+      - name: Publish image to docker hub
+        run: docker push realbadass/springboot-quiz-repo:latest
+
+  deploy:
+    needs: build
+    runs-on: [aws-ec2]
+    steps:
+      - name: Pull image from docker hub
+        run: docker pull realbadass/springboot-quiz-repo:latest
+      - name: Delete old container
+        run: docker rm -f springboot-quiz-container
+      - name: Run docker container
+        run: docker run --name springboot-quiz-container -e spring.datasource.username=${{ secrets.DB_USERNAME }} -e spring.datasource.password=${{ secrets.DB_PASSWORD }} -p 8092:8091 springboot-quiz-image
